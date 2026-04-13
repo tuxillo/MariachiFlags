@@ -3,29 +3,42 @@ import SwiftUI
 struct GameView: View {
     @ObservedObject var viewModel: GameViewModel
 
+    private var isGameplay: Bool {
+        switch viewModel.phase {
+        case .listening, .guessing, .result: return true
+        default: return false
+        }
+    }
+
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: backgroundColors,
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-            .animation(.easeInOut(duration: 0.5), value: viewModel.phase)
+            // Background
+            if isGameplay {
+                Color(red: 0.02, green: 0.02, blue: 0.08)
+                    .ignoresSafeArea()
+            } else {
+                LinearGradient(
+                    colors: backgroundColors,
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+            }
 
-            switch viewModel.phase {
-            case .start:
-                StartView(viewModel: viewModel)
-            case .highScores:
-                HighScoresView(viewModel: viewModel)
-            case .listening:
-                ListeningView(viewModel: viewModel)
-            case .guessing:
-                GuessingView(viewModel: viewModel)
-            case .result:
-                ResultView(viewModel: viewModel)
-            case .finished:
-                FinishedView(viewModel: viewModel)
+            if isGameplay {
+                // Globe persists across listening/guessing/result
+                GameplayView(viewModel: viewModel)
+            } else {
+                switch viewModel.phase {
+                case .start:
+                    StartView(viewModel: viewModel)
+                case .highScores:
+                    HighScoresView(viewModel: viewModel)
+                case .finished:
+                    FinishedView(viewModel: viewModel)
+                default:
+                    EmptyView()
+                }
             }
         }
     }
@@ -33,15 +46,42 @@ struct GameView: View {
     private var backgroundColors: [Color] {
         switch viewModel.phase {
         case .start, .highScores: return [.orange, .yellow]
-        case .listening:          return [.purple, .blue]
-        case .guessing:           return [.teal, .cyan]
-        case .result:
-            if viewModel.lastAnswerCorrect == true {
-                return [.green, .mint]
-            } else {
-                return [.red, .orange]
-            }
         case .finished:           return [.indigo, .purple]
+        default:                  return [.black, .black]
+        }
+    }
+}
+
+// MARK: - Gameplay View (Globe + Overlays)
+
+struct GameplayView: View {
+    @ObservedObject var viewModel: GameViewModel
+
+    var body: some View {
+        ZStack {
+            // Globe is always visible
+            VStack(spacing: 0) {
+                GameTopBar(viewModel: viewModel)
+
+                GlobeView(globeScene: viewModel.globeScene)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+            // Overlays on top of the globe
+            VStack {
+                Spacer()
+
+                switch viewModel.phase {
+                case .listening:
+                    ListeningOverlay(viewModel: viewModel)
+                case .guessing:
+                    GuessingOverlay(viewModel: viewModel)
+                case .result:
+                    ResultOverlay(viewModel: viewModel)
+                default:
+                    EmptyView()
+                }
+            }
         }
     }
 }
@@ -248,74 +288,42 @@ struct HighScoresView: View {
     }
 }
 
-// MARK: - Listening (Music Playing)
+// MARK: - Listening Overlay (shown at bottom while globe spins)
 
-struct ListeningView: View {
+struct ListeningOverlay: View {
     @ObservedObject var viewModel: GameViewModel
 
-    @State private var noteOffset: CGFloat = 0
-    @State private var rotation: Double = 0
-
     var body: some View {
-        VStack(spacing: 40) {
-            GameTopBar(viewModel: viewModel)
-
-            Spacer()
-
-            Text("🎶")
-                .font(.system(size: 100))
-                .rotationEffect(.degrees(rotation))
-                .offset(y: noteOffset)
-                .animation(
-                    .easeInOut(duration: 0.8).repeatForever(autoreverses: true),
-                    value: noteOffset
-                )
-                .animation(
-                    .easeInOut(duration: 1.2).repeatForever(autoreverses: true),
-                    value: rotation
-                )
-
-            Text("Listen...")
-                .font(.system(size: 36, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-
+        VStack(spacing: 12) {
             if viewModel.streak > 1 {
                 Text("🔥 \(viewModel.streak) in a row!")
                     .font(.title3.weight(.semibold))
                     .foregroundColor(.yellow)
             }
-
-            Spacer()
         }
-        .padding()
-        .onAppear {
-            noteOffset = -30
-            rotation = 15
-        }
+        .padding(.bottom, 40)
     }
 }
 
-// MARK: - Guessing (Flag Shown)
+// MARK: - Guessing Overlay (flag + options on top of zoomed globe)
 
-struct GuessingView: View {
+struct GuessingOverlay: View {
     @ObservedObject var viewModel: GameViewModel
 
     @State private var flagScale: CGFloat = 0.1
 
     var body: some View {
-        VStack(spacing: 24) {
-            GameTopBar(viewModel: viewModel)
-
+        VStack(spacing: 16) {
             TimerBar(timeRemaining: viewModel.timeRemaining, timeLimit: viewModel.currentTimeLimit)
-                .padding(.horizontal)
-
-            Spacer()
+                .padding(.horizontal, 24)
 
             if let country = viewModel.currentCountry {
                 Text(country.flag)
-                    .font(.system(size: 140))
+                    .font(.system(size: 120))
+                    .shadow(color: .black.opacity(0.5), radius: 8)
                     .scaleEffect(flagScale)
                     .onAppear {
+                        flagScale = 0.1
                         withAnimation(.spring(response: 0.5, dampingFraction: 0.5)) {
                             flagScale = 1.0
                         }
@@ -323,81 +331,85 @@ struct GuessingView: View {
             }
 
             Text("Which country is this?")
-                .font(.title2.weight(.semibold))
+                .font(.title3.weight(.semibold))
                 .foregroundColor(.white)
+                .shadow(radius: 4)
 
-            VStack(spacing: 12) {
+            VStack(spacing: 10) {
                 ForEach(viewModel.options) { option in
                     Button {
                         viewModel.submitAnswer(option.name)
                     } label: {
                         Text(option.name)
-                            .font(.title3.weight(.semibold))
-                            .foregroundColor(.teal)
+                            .font(.body.weight(.semibold))
+                            .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .shadow(radius: 4)
+                            .padding(.vertical, 12)
+                            .background(.black.opacity(0.6))
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(.white.opacity(0.3), lineWidth: 1)
+                            )
                     }
                 }
             }
             .padding(.horizontal, 24)
-
-            Spacer()
         }
-        .padding()
+        .padding(.bottom, 30)
     }
 }
 
-// MARK: - Result
+// MARK: - Result Overlay (shown on top of zoomed globe)
 
-struct ResultView: View {
+struct ResultOverlay: View {
     @ObservedObject var viewModel: GameViewModel
 
     var body: some View {
-        VStack(spacing: 24) {
-            GameTopBar(viewModel: viewModel)
-
-            Spacer()
-
+        VStack(spacing: 16) {
             if let country = viewModel.currentCountry {
                 Text(country.flag)
-                    .font(.system(size: 100))
+                    .font(.system(size: 80))
+                    .shadow(color: .black.opacity(0.5), radius: 8)
 
                 Text(country.name)
-                    .font(.title.weight(.bold))
+                    .font(.title2.weight(.bold))
                     .foregroundColor(.white)
+                    .shadow(radius: 4)
             }
 
             if viewModel.lastAnswerCorrect == true {
-                Text("Correct!")
-                    .font(.system(size: 44, weight: .heavy, design: .rounded))
-                    .foregroundColor(.white)
-                Text("⭐️")
-                    .font(.system(size: 60))
+                Text("Correct! ⭐️")
+                    .font(.system(size: 36, weight: .heavy, design: .rounded))
+                    .foregroundColor(.green)
+                    .shadow(radius: 4)
             } else if viewModel.timedOut {
-                Text("Time's up!")
-                    .font(.system(size: 44, weight: .heavy, design: .rounded))
-                    .foregroundColor(.white)
-                Text("⏰")
-                    .font(.system(size: 60))
+                Text("Time's up! ⏰")
+                    .font(.system(size: 36, weight: .heavy, design: .rounded))
+                    .foregroundColor(.red)
+                    .shadow(radius: 4)
             } else {
-                Text("Not quite!")
-                    .font(.system(size: 44, weight: .heavy, design: .rounded))
-                    .foregroundColor(.white)
-                if let selected = viewModel.selectedAnswer {
-                    Text("You picked: \(selected)")
-                        .font(.title3)
-                        .foregroundColor(.white.opacity(0.8))
+                VStack(spacing: 8) {
+                    Text("Not quite! ❤️‍🩹")
+                        .font(.system(size: 36, weight: .heavy, design: .rounded))
+                        .foregroundColor(.red)
+                        .shadow(radius: 4)
+                    if let selected = viewModel.selectedAnswer {
+                        Text("You picked: \(selected)")
+                            .font(.body)
+                            .foregroundColor(.white.opacity(0.8))
+                    }
                 }
-                Text("❤️‍🩹")
-                    .font(.system(size: 60))
             }
-
-            Spacer()
         }
-        .padding()
+        .padding(.vertical, 20)
+        .padding(.horizontal, 24)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(.black.opacity(0.5))
+        )
+        .padding(.horizontal, 16)
+        .padding(.bottom, 40)
     }
 }
 

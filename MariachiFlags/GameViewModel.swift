@@ -27,6 +27,8 @@ class GameViewModel: ObservableObject {
     let maxLives = 3
     let audioManager = AudioManager()
     let highScoreManager = HighScoreManager()
+    let globeScene = GlobeScene()
+    private(set) var globeAnimator: GlobeAnimator!
 
     private var usedCountries: Set<String> = []
     private var guessTimer: Timer?
@@ -36,6 +38,16 @@ class GameViewModel: ObservableObject {
     /// Starts at 10s, decreases by 0.5s per correct answer, minimum 4s
     var currentTimeLimit: Double {
         max(4.0, 10.0 - Double(score) * 0.5)
+    }
+
+    init() {
+        globeAnimator = GlobeAnimator(globeScene: globeScene)
+        globeAnimator.onArrivedAtCountry = { [weak self] in
+            self?.revealFlag()
+        }
+        globeAnimator.onReturnedToIdle = { [weak self] in
+            self?.audioManager.raiseVolume()
+        }
     }
 
     func startGame() {
@@ -48,6 +60,7 @@ class GameViewModel: ObservableObject {
         selectedAnswer = nil
         isNewHighScore = false
         timedOut = false
+        globeAnimator.startIdleRotation()
         startListening()
     }
 
@@ -59,12 +72,13 @@ class GameViewModel: ObservableObject {
         phase = .listening
         audioManager.startMusic { [weak self] in
             DispatchQueue.main.async {
-                self?.presentFlag()
+                self?.prepareFlag()
             }
         }
     }
 
-    private func presentFlag() {
+    /// Called when music fades — select country and start globe fly-in
+    private func prepareFlag() {
         if usedCountries.count >= allCountries.count - 4 {
             usedCountries.removeAll()
         }
@@ -86,6 +100,12 @@ class GameViewModel: ObservableObject {
         selectedAnswer = nil
         timedOut = false
 
+        // Start globe fly-in — revealFlag() will be called when animation completes
+        globeAnimator.flyToCountry(correct)
+    }
+
+    /// Called when globe arrives at country — show flag and start guessing
+    private func revealFlag() {
         let limit = currentTimeLimit
         timeRemaining = limit
         guessDeadline = Date().addingTimeInterval(limit)
@@ -169,8 +189,9 @@ class GameViewModel: ObservableObject {
     }
 
     private func continueAfterResult() {
-        audioManager.raiseVolume()
         phase = .listening
+        // Zoom out globe — music volume raises when zoom-out completes (via onReturnedToIdle)
+        globeAnimator.zoomOut()
     }
 
     private func endGame() {
@@ -213,7 +234,6 @@ class GameViewModel: ObservableObject {
             audioManager.resumeLoud()
         case .guessing:
             audioManager.resumeQuiet()
-            // Resume the countdown
             startGuessTimer()
         case .result:
             audioManager.resumeQuiet()
