@@ -3,6 +3,11 @@ name: Build iOS IPA
 # Manual dispatch only — no automatic triggers
 on:
   workflow_dispatch:
+    inputs:
+      release_notes:
+        description: "Release notes (optional)"
+        required: false
+        default: ""
 
 # One build at a time
 concurrency:
@@ -14,7 +19,9 @@ jobs:
     name: Build unsigned IPA
     runs-on: macos-15        # ships Xcode 16
     permissions:
-      contents: read         # read-only access to the repo
+      contents: write        # needed to create GitHub releases
+      id-token: write        # needed to mint the OIDC token for attestation
+      attestations: write    # needed to store the provenance attestation
 
     steps:
       - name: Checkout
@@ -46,9 +53,34 @@ jobs:
           cd "$RUNNER_TEMP/ipa"
           zip -qr "$RUNNER_TEMP/MariachiFlags-unsigned.ipa" Payload
 
-      - name: Upload IPA artifact
-        uses: actions/upload-artifact@v4
+      # Cryptographically links the IPA to this repo, workflow, and commit.
+      # Anyone can verify with:
+      #   gh attestation verify MariachiFlags-unsigned.ipa --repo <owner>/mariachiflags
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
         with:
-          name: MariachiFlags-unsigned-${{ github.run_number }}
-          path: ${{ runner.temp }}/MariachiFlags-unsigned.ipa
-          retention-days: 30
+          subject-path: ${{ runner.temp }}/MariachiFlags-unsigned.ipa
+
+      - name: Create GitHub Release and attach IPA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="build-$(date -u +'%Y%m%d')-${{ github.run_number }}"
+          TITLE="MariachiFlags $TAG"
+
+          NOTES="${{ inputs.release_notes }}"
+          if [ -z "$NOTES" ]; then
+            NOTES="Built from commit \`${{ github.sha }}\` via GitHub Actions run #${{ github.run_number }}.
+
+          **Installation:** download the IPA below and install with [AltStore](https://altstore.io) or [Sideloadly](https://sideloadly.io) (both re-sign locally with your free Apple ID — no paid developer account needed).
+
+          **Verify this build came from this repo:**
+          \`\`\`
+          gh attestation verify MariachiFlags-unsigned.ipa --repo ${{ github.repository }}
+          \`\`\`"
+          fi
+
+          gh release create "$TAG" \
+            --title "$TITLE" \
+            --notes "$NOTES" \
+            "$RUNNER_TEMP/MariachiFlags-unsigned.ipa#MariachiFlags-unsigned.ipa"
