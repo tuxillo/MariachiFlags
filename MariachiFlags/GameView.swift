@@ -32,6 +32,8 @@ struct GameView: View {
                 switch viewModel.phase {
                 case .start:
                     StartView(viewModel: viewModel)
+                case .settings:
+                    SettingsView(viewModel: viewModel)
                 case .highScores:
                     HighScoresView(viewModel: viewModel)
                 case .finished:
@@ -45,7 +47,7 @@ struct GameView: View {
 
     private var backgroundColors: [Color] {
         switch viewModel.phase {
-        case .start, .highScores: return [.orange, .yellow]
+        case .start, .settings, .highScores: return [.orange, .yellow]
         case .finished:           return [.indigo, .purple]
         default:                  return [.black, .black]
         }
@@ -194,12 +196,22 @@ struct StartView: View {
             }
             .padding(.top, 20)
 
-            Button {
-                viewModel.showHighScores()
-            } label: {
-                Label("High Scores", systemImage: "trophy.fill")
-                    .font(.title3.weight(.semibold))
-                    .foregroundColor(.white)
+            HStack(spacing: 24) {
+                Button {
+                    viewModel.showHighScores()
+                } label: {
+                    Label("High Scores", systemImage: "trophy.fill")
+                        .font(.title3.weight(.semibold))
+                        .foregroundColor(.white)
+                }
+
+                Button {
+                    viewModel.showSettings()
+                } label: {
+                    Label("Settings", systemImage: "gearshape.fill")
+                        .font(.title3.weight(.semibold))
+                        .foregroundColor(.white)
+                }
             }
         }
         .onAppear { bouncing = true }

@@ -19,6 +19,8 @@
 		AA0000290000000000000029 /* GlobeAnimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000190000000000000019 /* GlobeAnimator.swift */; };
 		AA000002A00000000000002A /* GlobeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001A00000000000001A /* GlobeView.swift */; };
 		AA000002B00000000000002B /* borders.geojson in Resources */ = {isa = PBXBuildFile; fileRef = AA000001B00000000000001B /* borders.geojson */; };
+		AA000002C00000000000002C /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001C00000000000001C /* SettingsManager.swift */; };
+		AA000002D00000000000002D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001D00000000000001D /* SettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +37,8 @@
 		AA0000190000000000000019 /* GlobeAnimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobeAnimator.swift; sourceTree = "<group>"; };
 		AA000001A00000000000001A /* GlobeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobeView.swift; sourceTree = "<group>"; };
 		AA000001B00000000000001B /* borders.geojson */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = borders.geojson; sourceTree = "<group>"; };
+		AA000001C00000000000001C /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
+		AA000001D00000000000001D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -68,6 +72,8 @@
 				AA0000180000000000000018 /* GlobeScene.swift */,
 				AA0000190000000000000019 /* GlobeAnimator.swift */,
 				AA000001A00000000000001A /* GlobeView.swift */,
+				AA000001C00000000000001C /* SettingsManager.swift */,
+				AA000001D00000000000001D /* SettingsView.swift */,
 				AA000001B00000000000001B /* borders.geojson */,
 				AA0000150000000000000015 /* Assets.xcassets */,
 				AA0000160000000000000016 /* background_music.mp3 */,
@@ -163,6 +169,8 @@
 				AA0000280000000000000028 /* GlobeScene.swift in Sources */,
 				AA0000290000000000000029 /* GlobeAnimator.swift in Sources */,
 				AA000002A00000000000002A /* GlobeView.swift in Sources */,
+				AA000002C00000000000002C /* SettingsManager.swift in Sources */,
+				AA000002D00000000000002D /* SettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

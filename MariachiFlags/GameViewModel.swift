@@ -3,6 +3,7 @@ import Combine
 
 enum GamePhase {
     case start
+    case settings
     case highScores
     case listening
     case guessing
@@ -27,6 +28,7 @@ class GameViewModel: ObservableObject {
     let maxLives = 3
     let audioManager = AudioManager()
     let highScoreManager = HighScoreManager()
+    let settingsManager = SettingsManager()
     let globeScene = GlobeScene()
     private(set) var globeAnimator: GlobeAnimator!
 
@@ -48,9 +50,22 @@ class GameViewModel: ObservableObject {
         globeAnimator.onReturnedToIdle = { [weak self] in
             self?.audioManager.raiseVolume()
         }
+        applySettings()
+    }
+
+    func showSettings() {
+        withAnimation { phase = .settings }
+    }
+
+    /// Push current settings into the audio manager
+    func applySettings() {
+        audioManager.waitMin = settingsManager.waitMin
+        audioManager.waitMax = settingsManager.waitMax
+        audioManager.customSongURL = settingsManager.resolveCustomSongURL()
     }
 
     func startGame() {
+        applySettings()
         score = 0
         lives = maxLives
         streak = 0
@@ -237,7 +252,7 @@ class GameViewModel: ObservableObject {
             startGuessTimer()
         case .result:
             audioManager.resumeQuiet()
-        case .start, .highScores, .finished:
+        case .start, .settings, .highScores, .finished:
             break
         }
     }

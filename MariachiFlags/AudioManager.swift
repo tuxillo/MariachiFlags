@@ -11,22 +11,16 @@ class AudioManager: ObservableObject {
     private let normalVolume: Float = 0.3
     private let quietVolume: Float = 0.08
 
+    /// External config — set by GameViewModel from SettingsManager
+    var waitMin: Double = 3.0
+    var waitMax: Double = 8.0
+    var customSongURL: URL?
+
     func startMusic(onFlagTime: @escaping () -> Void) {
         self.onFlagTime = onFlagTime
 
         if audioPlayer == nil {
-            if let url = Bundle.main.url(forResource: "background_music", withExtension: "mp3") ??
-                          Bundle.main.url(forResource: "background_music", withExtension: "m4a") {
-                do {
-                    try AVAudioSession.sharedInstance().setCategory(.ambient, mode: .default)
-                    try AVAudioSession.sharedInstance().setActive(true)
-                    audioPlayer = try AVAudioPlayer(contentsOf: url)
-                    audioPlayer?.numberOfLoops = -1
-                    audioPlayer?.volume = normalVolume
-                } catch {
-                    print("Audio player error: \(error)")
-                }
-            }
+            loadAudioPlayer()
         }
 
         audioPlayer?.volume = normalVolume
@@ -72,9 +66,42 @@ class AudioManager: ObservableObject {
         scheduleNextFlag()
     }
 
+    /// Reload audio player (call when song changes in settings)
+    func reloadSong() {
+        let wasPlaying = isPlaying
+        audioPlayer?.stop()
+        audioPlayer = nil
+        loadAudioPlayer()
+        if wasPlaying {
+            audioPlayer?.volume = normalVolume
+            audioPlayer?.play()
+        }
+    }
+
+    private func loadAudioPlayer() {
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.ambient, mode: .default)
+            try AVAudioSession.sharedInstance().setActive(true)
+
+            if let customURL = customSongURL {
+                let accessing = customURL.startAccessingSecurityScopedResource()
+                audioPlayer = try AVAudioPlayer(contentsOf: customURL)
+                if accessing { customURL.stopAccessingSecurityScopedResource() }
+            } else if let bundleURL = Bundle.main.url(forResource: "background_music", withExtension: "mp3") ??
+                                       Bundle.main.url(forResource: "background_music", withExtension: "m4a") {
+                audioPlayer = try AVAudioPlayer(contentsOf: bundleURL)
+            }
+
+            audioPlayer?.numberOfLoops = -1
+            audioPlayer?.volume = normalVolume
+        } catch {
+            print("Audio player error: \(error)")
+        }
+    }
+
     private func scheduleNextFlag() {
         timer?.invalidate()
-        let delay = Double.random(in: 3...8)
+        let delay = Double.random(in: waitMin...waitMax)
         timer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
             self?.lowerVolume()
             self?.onFlagTime?()
