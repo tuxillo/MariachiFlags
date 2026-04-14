@@ -58,6 +58,9 @@ struct GameView: View {
 
 struct GameplayView: View {
     @ObservedObject var viewModel: GameViewModel
+    @State private var toastTitle: String = ""
+    @State private var showToast: Bool = false
+    @State private var toastTask: DispatchWorkItem?
 
     var body: some View {
         ZStack {
@@ -84,7 +87,32 @@ struct GameplayView: View {
                     EmptyView()
                 }
             }
+
+            // Now-playing toast — fades in then out
+            VStack {
+                Spacer()
+                if showToast {
+                    NowPlayingToast(title: toastTitle)
+                        .transition(.opacity)
+                        .padding(.bottom, 110)
+                }
+            }
         }
+        .onReceive(viewModel.audioManager.$nowPlayingTitle) { title in
+            showNowPlayingToast(title: title)
+        }
+    }
+
+    private func showNowPlayingToast(title: String) {
+        toastTask?.cancel()
+        toastTitle = title
+        withAnimation(.easeIn(duration: 0.3)) { showToast = true }
+
+        let task = DispatchWorkItem {
+            withAnimation(.easeOut(duration: 0.6)) { showToast = false }
+        }
+        toastTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: task)
     }
 }
 
@@ -306,14 +334,78 @@ struct ListeningOverlay: View {
     @ObservedObject var viewModel: GameViewModel
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 8) {
             if viewModel.streak > 1 {
                 Text("🔥 \(viewModel.streak) in a row!")
                     .font(.title3.weight(.semibold))
                     .foregroundColor(.yellow)
             }
+            MiniPlayerView(viewModel: viewModel)
         }
-        .padding(.bottom, 40)
+        .padding(.bottom, 24)
+    }
+}
+
+// MARK: - Mini Player Controls
+
+struct MiniPlayerView: View {
+    @ObservedObject var viewModel: GameViewModel
+
+    private var audio: AudioManager { viewModel.audioManager }
+    private var hasMultipleTracks: Bool { audio.tracks.count > 1 }
+
+    var body: some View {
+        HStack(spacing: 28) {
+            Button { audio.playPrev() } label: {
+                Image(systemName: "backward.fill")
+                    .font(.title3)
+                    .foregroundColor(.white.opacity(hasMultipleTracks ? 0.85 : 0.25))
+            }
+            .disabled(!hasMultipleTracks)
+
+            VStack(spacing: 2) {
+                Image(systemName: "music.note")
+                    .font(.caption2)
+                    .foregroundColor(.white.opacity(0.5))
+                Text(audio.nowPlayingTitle)
+                    .font(.caption.weight(.medium))
+                    .foregroundColor(.white.opacity(0.75))
+                    .lineLimit(1)
+                    .frame(maxWidth: 160)
+            }
+
+            Button { audio.playNext() } label: {
+                Image(systemName: "forward.fill")
+                    .font(.title3)
+                    .foregroundColor(.white.opacity(hasMultipleTracks ? 0.85 : 0.25))
+            }
+            .disabled(!hasMultipleTracks)
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 10)
+        .background(.black.opacity(0.35))
+        .clipShape(Capsule())
+    }
+}
+
+// MARK: - Now Playing Toast
+
+struct NowPlayingToast: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "music.note")
+                .font(.caption)
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(.black.opacity(0.6))
+        .clipShape(Capsule())
     }
 }
 

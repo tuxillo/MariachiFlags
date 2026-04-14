@@ -61,7 +61,13 @@ class GameViewModel: ObservableObject {
     func applySettings() {
         audioManager.waitMin = settingsManager.waitMin
         audioManager.waitMax = settingsManager.waitMax
-        audioManager.customSongURL = settingsManager.resolveCustomSongURL()
+        audioManager.tracks = settingsManager.tracks.map { entry in
+            AudioTrack(name: entry.name, url: settingsManager.resolveURL(for: entry))
+        }
+        // Clamp index in case tracks were removed
+        if audioManager.currentTrackIndex >= audioManager.tracks.count {
+            audioManager.currentTrackIndex = 0
+        }
     }
 
     func startGame() {

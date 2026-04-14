@@ -1,67 +1,112 @@
 import Foundation
 
+struct TrackEntry: Codable, Identifiable {
+    var id: UUID
+    var name: String
+    var bookmarkData: Data?   // nil = built-in Jarabe Tapatío
+
+    var isBuiltIn: Bool { bookmarkData == nil }
+
+    // Fixed UUID so the built-in track is always the same object after decode
+    static let builtInID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+
+    static let builtIn = TrackEntry(
+        id: builtInID,
+        name: "Jarabe Tapatío",
+        bookmarkData: nil
+    )
+}
+
 class SettingsManager: ObservableObject {
+    private let tracksKey  = "settings.tracks2"
     private let waitMinKey = "settings.waitMin"
     private let waitMaxKey = "settings.waitMax"
-    private let customSongBookmarkKey = "settings.customSongBookmark"
-    private let customSongNameKey = "settings.customSongName"
 
-    /// Minimum seconds before music fades (default 3)
+    @Published var tracks: [TrackEntry] {
+        didSet { saveTracks() }
+    }
+
     @Published var waitMin: Double {
         didSet { UserDefaults.standard.set(waitMin, forKey: waitMinKey) }
     }
 
-    /// Maximum seconds before music fades (default 8)
     @Published var waitMax: Double {
         didSet { UserDefaults.standard.set(waitMax, forKey: waitMaxKey) }
     }
 
-    /// Display name of the custom song, nil = built-in Jarabe Tapatío
-    @Published var customSongName: String? {
-        didSet { UserDefaults.standard.set(customSongName, forKey: customSongNameKey) }
-    }
-
     init() {
-        let defaults = UserDefaults.standard
-        let storedMin = defaults.double(forKey: waitMinKey)
-        let storedMax = defaults.double(forKey: waitMaxKey)
-        self.waitMin = storedMin > 0 ? storedMin : 3.0
-        self.waitMax = storedMax > 0 ? storedMax : 8.0
-        self.customSongName = defaults.string(forKey: customSongNameKey)
-    }
+        let d = UserDefaults.standard
+        let min = d.double(forKey: waitMinKey)
+        let max = d.double(forKey: waitMaxKey)
+        self.waitMin = min > 0 ? min : 3.0
+        self.waitMax = max > 0 ? max : 8.0
 
-    /// Save a security-scoped bookmark for the user-picked audio file
-    func saveCustomSong(url: URL, name: String) {
-        do {
-            let bookmark = try url.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil)
-            UserDefaults.standard.set(bookmark, forKey: customSongBookmarkKey)
-            customSongName = name
-        } catch {
-            print("Failed to create bookmark: \(error)")
+        if let data = d.data(forKey: tracksKey),
+           let decoded = try? JSONDecoder().decode([TrackEntry].self, from: data),
+           !decoded.isEmpty {
+            self.tracks = decoded
+        } else {
+            self.tracks = [.builtIn]
         }
     }
 
-    /// Resolve the bookmarked URL (returns nil if using built-in song)
-    func resolveCustomSongURL() -> URL? {
-        guard let data = UserDefaults.standard.data(forKey: customSongBookmarkKey) else { return nil }
-        guard customSongName != nil else { return nil }
+    // MARK: - Tracklist mutations
+
+    func addTrack(url: URL, name: String) {
+        do {
+            let bookmark = try url.bookmarkData(
+                options: [],
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+            // Remove the built-in placeholder when the first custom track is added
+            tracks.removeAll { $0.isBuiltIn }
+            tracks.append(TrackEntry(id: UUID(), name: name, bookmarkData: bookmark))
+        } catch {
+            print("Bookmark error: \(error)")
+        }
+    }
+
+    func removeTrack(id: UUID) {
+        tracks.removeAll { $0.id == id && !$0.isBuiltIn }
+        // Restore built-in if the playlist is now empty
+        if tracks.isEmpty {
+            tracks = [.builtIn]
+        }
+    }
+
+    func moveTracks(from source: IndexSet, to destination: Int) {
+        tracks.move(fromOffsets: source, toOffset: destination)
+    }
+
+    /// Resolve a security-scoped bookmark to a URL (nil if built-in or stale)
+    func resolveURL(for track: TrackEntry) -> URL? {
+        guard let data = track.bookmarkData else { return nil }
         do {
             var isStale = false
-            let url = try URL(resolvingBookmarkData: data, options: [], relativeTo: nil, bookmarkDataIsStale: &isStale)
+            let url = try URL(
+                resolvingBookmarkData: data,
+                options: [],
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            )
             if isStale {
-                // Re-save the bookmark
-                saveCustomSong(url: url, name: customSongName ?? "Custom")
+                // Refresh bookmark
+                if let fresh = try? url.bookmarkData() {
+                    if let idx = tracks.firstIndex(where: { $0.id == track.id }) {
+                        tracks[idx].bookmarkData = fresh
+                    }
+                }
             }
             return url
         } catch {
-            print("Failed to resolve bookmark: \(error)")
             return nil
         }
     }
 
-    /// Reset to built-in song
-    func resetToDefaultSong() {
-        UserDefaults.standard.removeObject(forKey: customSongBookmarkKey)
-        customSongName = nil
+    private func saveTracks() {
+        if let data = try? JSONEncoder().encode(tracks) {
+            UserDefaults.standard.set(data, forKey: tracksKey)
+        }
     }
 }
